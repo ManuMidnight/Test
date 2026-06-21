@@ -145,324 +145,352 @@
 </div>
 
 <script>
-    window.addEventListener('load', () => {
-        const canvas = document.getElementById('game-canvas');
-        const ctx = canvas.getContext('2d');
+    // Esecuzione immediata dei puntatori DOM esterni
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
 
-        let gameActive = false;
-        let worldSize = { width: 2200, height: 2200 }; 
-        let gold = 0;
-        let activeQuest = null;
-        let camera = { x: 0, y: 0 };
+    let gameActive = false;
+    let worldSize = { width: 2200, height: 2200 }; 
+    let gold = 0;
+    let activeQuest = null;
+    let camera = { x: 0, y: 0 };
 
-        const player = {
-            name: "Gaspare", cloak: "#a22c2c",
-            x: 1100, y: 1200,
-            vx: 0, vy: 0, speed: 4.5,
-            width: 24, height: 48,
-            walkTimer: 0, isMoving: false
-        };
+    const player = {
+        name: "Gaspare", cloak: "#a22c2c",
+        x: 1100, y: 1200,
+        vx: 0, vy: 0, speed: 4.5,
+        width: 24, height: 48,
+        walkTimer: 0, isMoving: false
+    };
 
-        const buildings = [
-            { type: 'house', name: "Capanna di Bernardo", x: 600, y: 700, w: 140, h: 110, color: "#7a5c43", roof: "#9c7c5d" },
-            { type: 'inn', name: "Locanda del Cinghiale", x: 1100, y: 1100, w: 260, h: 180, color: "#8b5a2b", roof: "#5c3a21" },
-            { type: 'castle', name: "Maniero dei Medici", x: 1600, y: 650, w: 300, h: 220, color: "#616f7d", roof: "#3a4454" }
-        ];
+    const buildings = [
+        { type: 'house', name: "Capanna di Bernardo", x: 600, y: 700, w: 140, h: 110, color: "#7a5c43", roof: "#9c7c5d" },
+        { type: 'inn', name: "Locanda del Cinghiale", x: 1100, y: 1100, w: 260, h: 180, color: "#8b5a2b", roof: "#5c3a21" },
+        { type: 'castle', name: "Maniero dei Medici", x: 1600, y: 650, w: 300, h: 220, color: "#616f7d", roof: "#3a4454" }
+    ];
 
-        const npcs = [
-            { 
-                id: "contadino", name: "Bernardo il Tessitore", x: 670, y: 760, color: "#544338", detail: "#8b7355", ceto: "Povero",
-                dialogue: "Salute messaggero! Il Locandiere aspetta questa 'Sacchetta di Sementi'. Puoi portargliela tu? Le mie povere gambe cedono.",
-                quest: { item: "Sacchetta di Sementi", target: "locandiere", text: "Porta le sementi alla Locanda del Cinghiale." }
-            },
-            { 
-                id: "locandiere", name: "Mastro Giovanni", x: 1230, y: 1180, color: "#7c4224", detail: "#b8860b", ceto: "Borghese",
-                dialogue: "Benvenuto nella mia taverna! Se cerchi monete d'oro, Bernardo o la Contessa stasera hanno bisogno di un aiuto.",
-                completeDialogue: "Ah, finalmente le mie sementi! Ottimo lavoro, ragazzo. Prendi questa ricompensa!",
-                questReward: 25
-            },
-            { 
-                id: "nobile", name: "Contessa Beatrice", x: 1750, y: 720, color: "#4b2857", detail: "#d4af37", ceto: "Nobile",
-                dialogue: "Tu! Messaggero! Prendi questa 'Pergamena Sigillata' e consegnala immediatamente a Bernardo. Contiene ordini importanti.",
-                quest: { item: "Pergamena Sigillata", target: "contadino", text: "Consegna la pergamena sigillata a Bernardo il Tessitore." }
-            }
-        ];
-
-        const decorativeElements = [];
-        for (let i = 0; i < 65; i++) {
-            let rx = Math.random() * worldSize.width;
-            let ry = Math.random() * worldSize.height;
-            let vicinoAEdificio = buildings.some(b => Math.abs(rx - b.x) < 200 && Math.abs(ry - b.y) < 200);
-            if (!vicinoAEdificio) {
-                decorativeElements.push({ type: 'tree', x: rx, y: ry, size: 35 + Math.random() * 15 });
-            }
+    const npcs = [
+        { 
+            id: "contadino", name: "Bernardo il Tessitore", x: 670, y: 760, color: "#544338", detail: "#8b7355", ceto: "Povero",
+            dialogue: "Salute messaggero! Il Locandiere aspetta questa 'Sacchetta di Sementi'. Puoi portargliela tu? Le mie povere gambe cedono.",
+            quest: { item: "Sacchetta di Sementi", target: "locandiere", text: "Porta le sementi alla Locanda del Cinghiale." }
+        },
+        { 
+            id: "locandiere", name: "Mastro Giovanni", x: 1230, y: 1180, color: "#7c4224", detail: "#b8860b", ceto: "Borghese",
+            dialogue: "Benvenuto nella mia taverna! Se cerchi monete d'oro, Bernardo o la Contessa stasera hanno bisogno di un aiuto.",
+            completeDialogue: "Ah, finalmente le mie sementi! Ottimo lavoro, ragazzo. Prendi questa ricompensa!",
+            questReward: 25
+        },
+        { 
+            id: "nobile", name: "Contessa Beatrice", x: 1750, y: 720, color: "#4b2857", detail: "#d4af37", ceto: "Nobile",
+            dialogue: "Tu! Messaggero! Prendi questa 'Pergamena Sigillata' e consegnala immediatamente a Bernardo. Contiene ordini importanti.",
+            quest: { item: "Pergamena Sigillata", target: "contadino", text: "Consegna la pergamena sigillata a Bernardo il Tessitore." }
         }
-        for (let i = 0; i < 80; i++) {
-            decorativeElements.push({
-                type: 'flower',
-                x: Math.random() * worldSize.width,
-                y: Math.random() * worldSize.height,
-                color: ['#e63946', '#f1faee', '#a8dadc', '#ffb703'][Math.floor(Math.random() * 4)]
-            });
+    ];
+
+    const decorativeElements = [];
+    for (let i = 0; i < 65; i++) {
+        let rx = Math.random() * worldSize.width;
+        let ry = Math.random() * worldSize.height;
+        let vicinoAEdificio = buildings.some(b => Math.abs(rx - b.x) < 200 && Math.abs(ry - b.y) < 200);
+        if (!vicinoAEdificio) {
+            decorativeElements.push({ type: 'tree', x: rx, y: ry, size: 35 + Math.random() * 15 });
         }
+    }
+    for (let i = 0; i < 80; i++) {
+        decorativeElements.push({
+            type: 'flower',
+            x: Math.random() * worldSize.width,
+            y: Math.random() * worldSize.height,
+            color: ['#e63946', '#f1faee', '#a8dadc', '#ffb703'][Math.floor(Math.random() * 4)]
+        });
+    }
 
-        let currentNpcDialogue = null;
-        const keys = {};
+    let currentNpcDialogue = null;
+    const keys = {};
 
-        // --- JOYSTICK ANALOGICO ---
-        const joystick = {
-            active: false,
-            startX: 0, startY: 0,
-            vx: 0, vy: 0,
-            maxRadius: 40
-        };
+    // --- CONFIGURAZIONE INTERFACCIA JOYSTICK ---
+    const joystick = {
+        active: false,
+        startX: 0, startY: 0,
+        vx: 0, vy: 0,
+        maxRadius: 40
+    };
 
-        const joyContainer = document.getElementById('joystick-container');
-        const joyKnob = document.getElementById('joystick-knob');
+    const joyContainer = document.getElementById('joystick-container');
+    const joyKnob = document.getElementById('joystick-knob');
 
-        function initJoystick() {
-            if ('touchstart' in window || navigator.maxTouchPoints > 0 || window.innerWidth < 1024) {
-                joyContainer.style.display = 'flex';
-            }
-
-            joyContainer.addEventListener('touchstart', (e) => {
-                joystick.active = true;
-                const rect = joyContainer.getBoundingClientRect();
-                joystick.startX = rect.left + rect.width / 2;
-                joystick.startY = rect.top + rect.height / 2;
-            });
-
-            window.addEventListener('touchmove', (e) => {
-                if (!joystick.active) return;
-                const touch = Object.values(e.touches).find(t => t.target === joyContainer || joyContainer.contains(t.target));
-                if (!touch) return;
-
-                let dx = touch.clientX - joystick.startX;
-                let dy = touch.clientY - joystick.startY;
-                let dist = Math.sqrt(dx * dx + dy * dy);
-
-                if (dist > joystick.maxRadius) {
-                    dx = (dx / dist) * joystick.maxRadius;
-                    dy = (dy / dist) * joystick.maxRadius;
-                }
-
-                joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
-                joystick.vx = dx / joystick.maxRadius;
-                joystick.vy = dy / joystick.maxRadius;
-            });
-
-            window.addEventListener('touchend', () => {
-                if (!joystick.active) return;
-                joystick.active = false;
-                joystick.vx = 0;
-                joystick.vy = 0;
-                joyKnob.style.transform = 'translate(0px, 0px)';
-            });
+    function initJoystick() {
+        if ('touchstart' in window || navigator.maxTouchPoints > 0 || window.innerWidth < 1024) {
+            joyContainer.style.display = 'flex';
         }
 
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-
-        function initInput() {
-            initJoystick();
-
-            window.addEventListener('keydown', (e) => { 
-                if (!gameActive) return;
-                keys[e.code] = true; 
-                if (e.code === 'Space' || e.code === 'KeyE') triggerInteraction();
-            });
-            window.addEventListener('keyup', (e) => { if (gameActive) keys[e.code] = false; });
-
-            window.addEventListener('mousedown', () => {
-                if (gameActive && currentNpcDialogue) closeDialogue();
-            });
-            window.addEventListener('touchstart', () => {
-                if (gameActive && currentNpcDialogue) closeDialogue();
-            });
-
-            document.getElementById('action-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                triggerInteraction();
-            });
-
-            document.getElementById('dialogue-box').addEventListener('click', (e) => { 
-                e.stopPropagation();
-                closeDialogue(); 
-            });
-
-            document.querySelectorAll('.color-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
-                    btn.classList.add('selected');
-                    player.cloak = btn.dataset.color;
-                });
-            });
-        }
-        initInput();
-
-        document.getElementById('start-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            const nameVal = document.getElementById('player-name').value.trim();
-            if (nameVal) player.name = nameVal;
-
-            document.getElementById('menu-screen').style.display = 'none';
-            document.getElementById('ui-overlay').style.display = 'block';
-            
-            gameActive = true;
-            resizeCanvas();
-            requestAnimationFrame(gameLoop);
+        joyContainer.addEventListener('touchstart', (e) => {
+            joystick.active = true;
+            const rect = joyContainer.getBoundingClientRect();
+            joystick.startX = rect.left + rect.width / 2;
+            joystick.startY = rect.top + rect.height / 2;
         });
 
-        function triggerInteraction() {
-            if (currentNpcDialogue) {
-                closeDialogue();
-                return;
+        window.addEventListener('touchmove', (e) => {
+            if (!joystick.active) return;
+            const touch = e.touches[0];
+            if (!touch) return;
+
+            let dx = touch.clientX - joystick.startX;
+            let dy = touch.clientY - joystick.startY;
+            let dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > joystick.maxRadius) {
+                dx = (dx / dist) * joystick.maxRadius;
+                dy = (dy / dist) * joystick.maxRadius;
             }
 
-            const nearNpc = npcs.find(npc => {
-                let dx = player.x - npc.x;
-                let dy = player.y - npc.y;
-                return Math.sqrt(dx * dx + dy * dy) < 70;
+            joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+            joystick.vx = dx / joystick.maxRadius;
+            joystick.vy = dy / joystick.maxRadius;
+        }, { passive: true });
+
+        window.addEventListener('touchend', () => {
+            if (!joystick.active) return;
+            joystick.active = false;
+            joystick.vx = 0;
+            joystick.vy = 0;
+            joyKnob.style.transform = 'translate(0px, 0px)';
+        });
+    }
+
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function initInput() {
+        initJoystick();
+
+        window.addEventListener('keydown', (e) => { 
+            if (!gameActive) return;
+            keys[e.code] = true; 
+            if (e.code === 'Space' || e.code === 'KeyE') triggerInteraction();
+        });
+        window.addEventListener('keyup', (e) => { if (gameActive) keys[e.code] = false; });
+
+        window.addEventListener('mousedown', () => {
+            if (gameActive && currentNpcDialogue) closeDialogue();
+        });
+        window.addEventListener('touchstart', () => {
+            if (gameActive && currentNpcDialogue) closeDialogue();
+        });
+
+        document.getElementById('action-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            triggerInteraction();
+        });
+
+        document.getElementById('dialogue-box').addEventListener('click', (e) => { 
+            e.stopPropagation();
+            closeDialogue(); 
+        });
+
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                player.cloak = btn.dataset.color;
             });
+        });
+    }
+    initInput();
 
-            if (nearNpc) {
-                currentNpcDialogue = nearNpc;
-                let msg = nearNpc.dialogue;
+    document.getElementById('start-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        const nameVal = document.getElementById('player-name').value.trim();
+        if (nameVal) player.name = nameVal;
 
-                if (activeQuest && activeQuest.target === nearNpc.id) {
-                    msg = nearNpc.completeDialogue || "Grazie per aver completato la consegna!";
-                } else if (activeQuest && activeQuest.target !== nearNpc.id) {
-                    msg = `Salute messaggero, hai già dei documenti con te. Consegna quelli prima!`;
-                }
+        document.getElementById('menu-screen').style.display = 'none';
+        document.getElementById('ui-overlay').style.display = 'block';
+        
+        gameActive = true;
+        resizeCanvas();
+        requestAnimationFrame(gameLoop);
+    });
 
-                document.getElementById('dialogue-text').innerHTML = `<strong>${nearNpc.name}</strong> <small>(${nearNpc.ceto})</small><br>"${msg}"`;
-                document.getElementById('dialogue-box').style.display = 'block';
-            }
+    function triggerInteraction() {
+        if (currentNpcDialogue) {
+            closeDialogue();
+            return;
         }
 
-        function closeDialogue() {
-            if (!currentNpcDialogue) return;
-            const npc = currentNpcDialogue;
-            document.getElementById('dialogue-box').style.display = 'none';
-            currentNpcDialogue = null;
+        const nearNpc = npcs.find(npc => {
+            let dx = player.x - npc.x;
+            let dy = player.y - npc.y;
+            return Math.sqrt(dx * dx + dy * dy) < 70;
+        });
 
-            if (activeQuest && activeQuest.target === npc.id) {
-                gold += npc.questReward || 20;
-                document.getElementById('gold-display').innerText = `💰 ${gold} Monete`;
-                activeQuest = null;
-                document.getElementById('quest-status').innerText = "Incarico: Esplora il villaggio in lungo e in largo.";
-            } else if (!activeQuest && npc.quest) {
-                activeQuest = npc.quest;
-                document.getElementById('quest-status').innerText = `Incarico: ${activeQuest.text} [${activeQuest.item}]`;
+        if (nearNpc) {
+            currentNpcDialogue = nearNpc;
+            let msg = nearNpc.dialogue;
+
+            if (activeQuest && activeQuest.target === nearNpc.id) {
+                msg = nearNpc.completeDialogue || "Grazie per aver completato la consegna!";
+            } else if (activeQuest && activeQuest.target !== nearNpc.id) {
+                msg = `Salute messaggero, hai già dei documenti con te. Consegna quelli prima!`;
             }
+
+            document.getElementById('dialogue-text').innerHTML = `<strong>${nearNpc.name}</strong> <small>(${nearNpc.ceto})</small><br>"${msg}"`;
+            document.getElementById('dialogue-box').style.display = 'block';
+        }
+    }
+
+    function closeDialogue() {
+        if (!currentNpcDialogue) return;
+        const npc = currentNpcDialogue;
+        document.getElementById('dialogue-box').style.display = 'none';
+        currentNpcDialogue = null;
+
+        if (activeQuest && activeQuest.target === npc.id) {
+            gold += npc.questReward || 20;
+            document.getElementById('gold-display').innerText = `💰 ${gold} Monete`;
+            activeQuest = null;
+            document.getElementById('quest-status').innerText = "Incarico: Esplora il villaggio in lungo e in largo.";
+        } else if (!activeQuest && npc.quest) {
+            activeQuest = npc.quest;
+            document.getElementById('quest-status').innerText = `Incarico: ${activeQuest.text} [${activeQuest.item}]`;
+        }
+    }
+
+    function update() {
+        if (currentNpcDialogue) {
+            player.isMoving = false;
+            return;
         }
 
-        function update() {
-            if (currentNpcDialogue) {
-                player.isMoving = false;
-                return;
-            }
+        player.vx = 0;
+        player.vy = 0;
 
-            player.vx = 0;
-            player.vy = 0;
+        if (keys['ArrowRight'] || keys['KeyD']) player.vx = player.speed;
+        if (keys['ArrowLeft'] || keys['KeyA']) player.vx = -player.speed;
+        if (keys['ArrowUp'] || keys['KeyW']) player.vy = -player.speed;
+        if (keys['ArrowDown'] || keys['KeyS']) player.vy = player.speed;
 
-            if (keys['ArrowRight'] || keys['KeyD']) player.vx = player.speed;
-            if (keys['ArrowLeft'] || keys['KeyA']) player.vx = -player.speed;
-            if (keys['ArrowUp'] || keys['KeyW']) player.vy = -player.speed;
-            if (keys['ArrowDown'] || keys['KeyS']) player.vy = player.speed;
-
-            if (joystick.active) {
-                player.vx = joystick.vx * player.speed;
-                player.vy = joystick.vy * player.speed;
-            }
-
-            player.x += player.vx;
-            player.y += player.vy;
-
-            if (player.x < 50) player.x = 50;
-            if (player.x > worldSize.width - 50) player.x = worldSize.width - 50;
-            if (player.y < 50) player.y = 50;
-            if (player.y > worldSize.height - 50) player.y = worldSize.height - 50;
-
-            if (player.vx !== 0 || player.vy !== 0) {
-                player.isMoving = true;
-                player.walkTimer += 0.2;
-            } else {
-                player.isMoving = false;
-            }
-
-            camera.x += ((player.x - canvas.width / 2) - camera.x) * 0.08;
-            camera.y += ((player.y - canvas.height / 2) - camera.y) * 0.08;
-
-            if (camera.x < 0) camera.x = 0;
-            if (camera.x > worldSize.width - canvas.width) camera.x = worldSize.width - canvas.width;
-            if (camera.y < 0) camera.y = 0;
-            if (camera.y > worldSize.height - canvas.height) camera.y = worldSize.height - canvas.height;
-
-            const nearAnyNpc = npcs.some(npc => {
-                let dx = player.x - npc.x;
-                let dy = player.y - npc.y;
-                return Math.sqrt(dx * dx + dy * dy) < 70;
-            });
-            document.getElementById('action-btn').style.display = nearAnyNpc ? 'flex' : 'none';
+        if (joystick.active) {
+            player.vx = joystick.vx * player.speed;
+            player.vy = joystick.vy * player.speed;
         }
 
-        function render() {
-            ctx.fillStyle = '#4f6e42';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        player.x += player.vx;
+        player.y += player.vy;
 
-            ctx.save();
-            ctx.translate(-camera.x, -camera.y);
+        if (player.x < 50) player.x = 50;
+        if (player.x > worldSize.width - 50) player.x = worldSize.width - 50;
+        if (player.y < 50) player.y = 50;
+        if (player.y > worldSize.height - 50) player.y = worldSize.height - 50;
 
-            ctx.fillStyle = '#6b655b';
-            ctx.beginPath();
-            ctx.arc(1200, 1200, 220, 0, Math.PI * 2);
-            ctx.fill();
+        if (player.vx !== 0 || player.vy !== 0) {
+            player.isMoving = true;
+            player.walkTimer += 0.2;
+        } else {
+            player.isMoving = false;
+        }
 
-            ctx.strokeStyle = '#8c765c';
-            ctx.lineWidth = 45;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.beginPath();
-            ctx.moveTo(670, 760);  
-            ctx.lineTo(1200, 1200); 
-            ctx.lineTo(1750, 720);  
-            ctx.stroke();
+        camera.x += ((player.x - canvas.width / 2) - camera.x) * 0.08;
+        camera.y += ((player.y - canvas.height / 2) - camera.y) * 0.08;
 
-            decorativeElements.forEach(el => {
-                if (el.type === 'flower') {
-                    ctx.fillStyle = el.color;
+        if (camera.x < 0) camera.x = 0;
+        if (camera.x > worldSize.width - canvas.width) camera.x = Math.max(0, worldSize.width - canvas.width);
+        if (camera.y < 0) camera.y = 0;
+        if (camera.y > worldSize.height - canvas.height) camera.y = Math.max(0, worldSize.height - canvas.height);
+
+        const nearAnyNpc = npcs.some(npc => {
+            let dx = player.x - npc.x;
+            let dy = player.y - npc.y;
+            return Math.sqrt(dx * dx + dy * dy) < 70;
+        });
+        document.getElementById('action-btn').style.display = nearAnyNpc ? 'flex' : 'none';
+    }
+
+    function render() {
+        ctx.fillStyle = '#4f6e42';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        ctx.translate(-camera.x, -camera.y);
+
+        ctx.fillStyle = '#6b655b';
+        ctx.beginPath();
+        ctx.arc(1200, 1200, 220, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#8c765c';
+        ctx.lineWidth = 45;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(670, 760);  
+        ctx.lineTo(1200, 1200); 
+        ctx.lineTo(1750, 720);  
+        ctx.stroke();
+
+        decorativeElements.forEach(el => {
+            if (el.type === 'flower') {
+                ctx.fillStyle = el.color;
+                ctx.beginPath();
+                ctx.arc(el.x, el.y, 3, 0, Math.PI*2);
+                ctx.fill();
+            }
+        });
+
+        const entities = [];
+
+        buildings.forEach(b => {
+            entities.push({
+                y: b.y,
+                render: () => {
+                    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                    ctx.fillRect(b.x - b.w/2 + 10, b.y - 15, b.w, 30);
+
+                    ctx.fillStyle = b.color;
+                    ctx.fillRect(b.x - b.w/2, b.y - b.h, b.w, b.h);
+
+                    ctx.strokeStyle = '#3e2a14';
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(b.x - b.w/2, b.y - b.h, b.w, b.h);
                     ctx.beginPath();
-                    ctx.arc(el.x, el.y, 3, 0, Math.PI*2);
+                    ctx.moveTo(b.x - b.w/2, b.y - b.h); ctx.lineTo(b.x + b.w/2, b.y);
+                    ctx.moveTo(b.x + b.w/2, b.y - b.h); ctx.lineTo(b.x - b.w/2, b.y);
+                    ctx.stroke();
+
+                    ctx.fillStyle = b.roof;
+                    ctx.beginPath();
+                    ctx.moveTo(b.x - b.w/2 - 15, b.y - b.h);
+                    ctx.lineTo(b.x, b.y - b.h - 50);
+                    ctx.lineTo(b.x + b.w/2 + 15, b.y - b.h);
+                    ctx.closePath();
                     ctx.fill();
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#26190a';
+                    ctx.fillRect(b.x - 18, b.y - 45, 36, 45);
+
+                    ctx.fillStyle = '#ffd000';
+                    ctx.fillRect(b.x - b.w/4 - 10, b.y - b.h + 30, 20, 25);
+                    ctx.fillRect(b.x + b.w/4 - 10, b.y - b.h + 30, 20, 25);
+                    
+                    ctx.fillStyle = '#f4edd2';
+                    ctx.font = 'italic bold 13px Georgia';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(b.name, b.x, b.y - b.h - 10);
                 }
             });
+        });
 
-            const entities = [];
-
-            buildings.forEach(b => {
+        decorativeElements.forEach(el => {
+            if (el.type === 'tree') {
                 entities.push({
-                    y: b.y,
+                    y: el.y,
                     render: () => {
-                        ctx.fillStyle = 'rgba(0,0,0,0.2)';
-                        ctx.fillRect(b.x - b.w/2 + 10, b.y - 15, b.w, 30);
-
-                        ctx.fillStyle = b.color;
-                        ctx.fillRect(b.x - b.w/2, b.y - b.h, b.w, b.h);
-
-                        ctx.strokeStyle = '#3e2a14';
-                        ctx.lineWidth = 4;
-                        ctx.strokeRect(b.x - b.w/2, b.y - b.h, b.w, b.h);
+                        ctx.fillStyle = 'rgba(0,0,0,0.25)';
                         ctx.beginPath();
-                        ctx.moveTo(b.x - b.w/2, b.y - b.h); ctx.lineTo(b.x + b.w/2, b.y);
-                        ctx.moveTo(b.x + b.w/2, b.y - b.h); ctx.lineTo(b.x - b.w/2, b.y);
-                        ctx.stroke();
-
-                        ctx.fillStyle = b.roof;
-                        ctx.beginPath();
-                        ctx.moveTo(b.x - b.w/2 - 15, b.y - b.h);
-                        ctx.lineTo(b.x
+                        ctx.ellip
