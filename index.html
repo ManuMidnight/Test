@@ -29,6 +29,7 @@
             background: radial-gradient(circle, #2c2017 0%, #0d0906 100%);
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             z-index: 100; padding: 20px; text-align: center;
+            pointer-events: auto;
         }
         .menu-title {
             font-size: 32px; color: #d4af37; margin-bottom: 25px;
@@ -52,6 +53,7 @@
             background: #8b5a2b; color: #f4edd2; border: 2px solid #d4af37;
             border-radius: 8px; cursor: pointer; font-weight: bold; font-family: inherit;
             box-shadow: 0 5px 15px rgba(0,0,0,0.6);
+            pointer-events: auto;
         }
         #start-btn:hover { background: #d4af37; color: #1a130e; }
 
@@ -92,14 +94,14 @@
         /* Levetta Analogica Virtuale (Joystick) */
         #joystick-container {
             display: none; position: absolute; left: 40px; bottom: 40px;
-            width: 110px; height: 110px; background: rgba(25, 20, 15, 0.5);
-            border: 2px solid rgba(139, 90, 43, 0.4); border-radius: 50%;
+            width: 110px; height: 110px; background: rgba(25, 20, 15, 0.6);
+            border: 2px solid rgba(139, 90, 43, 0.5); border-radius: 50%;
             pointer-events: auto; z-index: 40; justify-content: center; align-items: center;
         }
         #joystick-knob {
             width: 45px; height: 45px; background: #8b5a2b;
             border: 2px solid #d4af37; border-radius: 50%;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.5); transition: transform 0.05s linear;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5); pointer-events: none;
         }
 
         @keyframes blink { 50% { opacity: 0; } }
@@ -148,29 +150,25 @@
         const ctx = canvas.getContext('2d');
 
         let gameActive = false;
-        // Mappa 2.5D quadrata esplorabile in tutte le direzioni
         let worldSize = { width: 2200, height: 2200 }; 
         let gold = 0;
         let activeQuest = null;
         let camera = { x: 0, y: 0 };
 
-        // Stato Giocatore (Predisposto al movimento a 360°)
         const player = {
             name: "Gaspare", cloak: "#a22c2c",
             x: 1100, y: 1200,
-            vx: 0, vy: 0, speed: 4,
+            vx: 0, vy: 0, speed: 4.5,
             width: 24, height: 48,
             walkTimer: 0, isMoving: false
         };
 
-        // Strutture posizionate nello spazio tridimensionale della mappa
         const buildings = [
             { type: 'house', name: "Capanna di Bernardo", x: 600, y: 700, w: 140, h: 110, color: "#7a5c43", roof: "#9c7c5d" },
             { type: 'inn', name: "Locanda del Cinghiale", x: 1100, y: 1100, w: 260, h: 180, color: "#8b5a2b", roof: "#5c3a21" },
             { type: 'castle', name: "Maniero dei Medici", x: 1600, y: 650, w: 300, h: 220, color: "#616f7d", roof: "#3a4454" }
         ];
 
-        // NPC con coordinate X e Y dedicate
         const npcs = [
             { 
                 id: "contadino", name: "Bernardo il Tessitore", x: 670, y: 760, color: "#544338", detail: "#8b7355", ceto: "Povero",
@@ -190,19 +188,15 @@
             }
         ];
 
-        // Generazione procedurale di elementi estetici (Alberi e Fiori) per rendere la mappa bellina
         const decorativeElements = [];
-        // Genera Alberi sparsi
         for (let i = 0; i < 65; i++) {
             let rx = Math.random() * worldSize.width;
             let ry = Math.random() * worldSize.height;
-            // Evita che gli alberi nascano sopra i punti caldi delle case
             let vicinoAEdificio = buildings.some(b => Math.abs(rx - b.x) < 200 && Math.abs(ry - b.y) < 200);
             if (!vicinoAEdificio) {
                 decorativeElements.push({ type: 'tree', x: rx, y: ry, size: 35 + Math.random() * 15 });
             }
         }
-        // Genera ciuffi di fiori
         for (let i = 0; i < 80; i++) {
             decorativeElements.push({
                 type: 'flower',
@@ -215,11 +209,10 @@
         let currentNpcDialogue = null;
         const keys = {};
 
-        // --- SISTEMA JOYSTICK ANALOGICO ---
+        // --- JOYSTICK ANALOGICO ---
         const joystick = {
             active: false,
             startX: 0, startY: 0,
-            moveX: 0, moveY: 0,
             vx: 0, vy: 0,
             maxRadius: 40
         };
@@ -228,8 +221,7 @@
         const joyKnob = document.getElementById('joystick-knob');
 
         function initJoystick() {
-            // Rileva automaticamente se lo schermo supporta il touch per mostrare il joystick
-            if ('touchstart' in window || navigator.maxTouchPoints > 0) {
+            if ('touchstart' in window || navigator.maxTouchPoints > 0 || window.innerWidth < 1024) {
                 joyContainer.style.display = 'flex';
             }
 
@@ -252,12 +244,9 @@
                 if (dist > joystick.maxRadius) {
                     dx = (dx / dist) * joystick.maxRadius;
                     dy = (dy / dist) * joystick.maxRadius;
-                    dist = joystick.maxRadius;
                 }
 
                 joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
-                
-                // Normalizza le velocità dell'analogico
                 joystick.vx = dx / joystick.maxRadius;
                 joystick.vy = dy / joystick.maxRadius;
             });
@@ -281,7 +270,6 @@
         function initInput() {
             initJoystick();
 
-            // Tastiera (PC) - Movimento Omnidirezionale
             window.addEventListener('keydown', (e) => { 
                 if (!gameActive) return;
                 keys[e.code] = true; 
@@ -289,15 +277,23 @@
             });
             window.addEventListener('keyup', (e) => { if (gameActive) keys[e.code] = false; });
 
-            // Pulsante virtuale d'azione
+            window.addEventListener('mousedown', () => {
+                if (gameActive && currentNpcDialogue) closeDialogue();
+            });
+            window.addEventListener('touchstart', () => {
+                if (gameActive && currentNpcDialogue) closeDialogue();
+            });
+
             document.getElementById('action-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
                 triggerInteraction();
             });
 
-            document.getElementById('dialogue-box').addEventListener('click', () => { closeDialogue(); });
+            document.getElementById('dialogue-box').addEventListener('click', (e) => { 
+                e.stopPropagation();
+                closeDialogue(); 
+            });
 
-            // Selezione estetica colore vestito
             document.querySelectorAll('.color-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
@@ -308,7 +304,6 @@
         }
         initInput();
 
-        // Avvio effettivo del gioco
         document.getElementById('start-btn').addEventListener('click', (e) => {
             e.preventDefault();
             const nameVal = document.getElementById('player-name').value.trim();
@@ -322,7 +317,6 @@
             requestAnimationFrame(gameLoop);
         });
 
-        // Logica di calcolo vicinanza ed interazione basata sulla distanza euclidea
         function triggerInteraction() {
             if (currentNpcDialogue) {
                 closeDialogue();
@@ -332,7 +326,7 @@
             const nearNpc = npcs.find(npc => {
                 let dx = player.x - npc.x;
                 let dy = player.y - npc.y;
-                return Math.sqrt(dx * dx + dy * dy) < 70; // Raggio interazione spaziale
+                return Math.sqrt(dx * dx + dy * dy) < 70;
             });
 
             if (nearNpc) {
@@ -342,7 +336,7 @@
                 if (activeQuest && activeQuest.target === nearNpc.id) {
                     msg = nearNpc.completeDialogue || "Grazie per aver completato la consegna!";
                 } else if (activeQuest && activeQuest.target !== nearNpc.id) {
-                    msg = `Salute messaggero, vedo che hai già dei documenti con te. Consegna quelli prima!`;
+                    msg = `Salute messaggero, hai già dei documenti con te. Consegna quelli prima!`;
                 }
 
                 document.getElementById('dialogue-text').innerHTML = `<strong>${nearNpc.name}</strong> <small>(${nearNpc.ceto})</small><br>"${msg}"`;
@@ -367,40 +361,33 @@
             }
         }
 
-        // Fisica di aggiornamento movimento e camera
         function update() {
             if (currentNpcDialogue) {
                 player.isMoving = false;
                 return;
             }
 
-            // Reset velocità ad ogni frame
             player.vx = 0;
             player.vy = 0;
 
-            // 1. Lettura Input Tastiera
             if (keys['ArrowRight'] || keys['KeyD']) player.vx = player.speed;
             if (keys['ArrowLeft'] || keys['KeyA']) player.vx = -player.speed;
             if (keys['ArrowUp'] || keys['KeyW']) player.vy = -player.speed;
             if (keys['ArrowDown'] || keys['KeyS']) player.vy = player.speed;
 
-            // 2. Lettura Input Joystick (Sovrascrive se attivo)
             if (joystick.active) {
                 player.vx = joystick.vx * player.speed;
                 player.vy = joystick.vy * player.speed;
             }
 
-            // Applica il movimento effettivo
             player.x += player.vx;
             player.y += player.vy;
 
-            // Limiti fisici della mappa quadrata
             if (player.x < 50) player.x = 50;
             if (player.x > worldSize.width - 50) player.x = worldSize.width - 50;
             if (player.y < 50) player.y = 50;
             if (player.y > worldSize.height - 50) player.y = worldSize.height - 50;
 
-            // Gestione animazioni di camminata
             if (player.vx !== 0 || player.vy !== 0) {
                 player.isMoving = true;
                 player.walkTimer += 0.2;
@@ -408,17 +395,14 @@
                 player.isMoving = false;
             }
 
-            // Inseguimento fluido della telecamera su entrambi gli assi (X e Y)
             camera.x += ((player.x - canvas.width / 2) - camera.x) * 0.08;
             camera.y += ((player.y - canvas.height / 2) - camera.y) * 0.08;
 
-            // Vincoli della telecamera ai bordi del mondo
             if (camera.x < 0) camera.x = 0;
-            if (camera.x > worldSize.width - canvas.width) camera.x = worldWidth = worldSize.width - canvas.width;
+            if (camera.x > worldSize.width - canvas.width) camera.x = worldSize.width - canvas.width;
             if (camera.y < 0) camera.y = 0;
             if (camera.y > worldSize.height - canvas.height) camera.y = worldSize.height - canvas.height;
 
-            // Attivazione pulsante d'azione mobile se vicino a un NPC
             const nearAnyNpc = npcs.some(npc => {
                 let dx = player.x - npc.x;
                 let dy = player.y - npc.y;
@@ -427,25 +411,58 @@
             document.getElementById('action-btn').style.display = nearAnyNpc ? 'flex' : 'none';
         }
 
-        // --- MOTORE DI RENDERING CON Y-SORTING ---
         function render() {
-            // Sfondo erboso generale (tessitura soffice)
             ctx.fillStyle = '#4f6e42';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             ctx.save();
             ctx.translate(-camera.x, -camera.y);
 
-            // Disegno elementi della pavimentazione stradale (Sotto le entità)
-            // Piazza Centrale in Pietra della locanda
             ctx.fillStyle = '#6b655b';
             ctx.beginPath();
             ctx.arc(1200, 1200, 220, 0, Math.PI * 2);
             ctx.fill();
 
-            // Sentieri principali caldi di terra battuta
             ctx.strokeStyle = '#8c765c';
             ctx.lineWidth = 45;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-            ctx.beginPa
+            ctx.beginPath();
+            ctx.moveTo(670, 760);  
+            ctx.lineTo(1200, 1200); 
+            ctx.lineTo(1750, 720);  
+            ctx.stroke();
+
+            decorativeElements.forEach(el => {
+                if (el.type === 'flower') {
+                    ctx.fillStyle = el.color;
+                    ctx.beginPath();
+                    ctx.arc(el.x, el.y, 3, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            });
+
+            const entities = [];
+
+            buildings.forEach(b => {
+                entities.push({
+                    y: b.y,
+                    render: () => {
+                        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                        ctx.fillRect(b.x - b.w/2 + 10, b.y - 15, b.w, 30);
+
+                        ctx.fillStyle = b.color;
+                        ctx.fillRect(b.x - b.w/2, b.y - b.h, b.w, b.h);
+
+                        ctx.strokeStyle = '#3e2a14';
+                        ctx.lineWidth = 4;
+                        ctx.strokeRect(b.x - b.w/2, b.y - b.h, b.w, b.h);
+                        ctx.beginPath();
+                        ctx.moveTo(b.x - b.w/2, b.y - b.h); ctx.lineTo(b.x + b.w/2, b.y);
+                        ctx.moveTo(b.x + b.w/2, b.y - b.h); ctx.lineTo(b.x - b.w/2, b.y);
+                        ctx.stroke();
+
+                        ctx.fillStyle = b.roof;
+                        ctx.beginPath();
+                        ctx.moveTo(b.x - b.w/2 - 15, b.y - b.h);
+                        ctx.lineTo(b.x
