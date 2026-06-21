@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Il Messaggero del Regno</title>
+    <title>Il Messaggero Medievale</title>
     <style>
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
         body {
@@ -31,7 +31,7 @@
             width: 100%;
             height: 100%;
         }
-        /* Schermata di Customizzazione */
+        /* Schermata di Creazione Personaggio */
         #menu-screen {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -40,7 +40,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 10;
+            z-index: 100;
             padding: 20px;
             text-align: center;
         }
@@ -114,6 +114,7 @@
             top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none;
             padding: 15px;
+            z-index: 10;
         }
         .hud-card {
             background: rgba(36, 29, 23, 0.85);
@@ -147,6 +148,7 @@
             border-radius: 8px;
             pointer-events: auto;
             box-shadow: 0 6px 20px rgba(0,0,0,0.7);
+            z-index: 20;
         }
         #dialogue-text { margin: 0; font-size: 15px; line-height: 1.5; color: #f4edd2; }
         #dialogue-prompt { text-align: right; font-size: 11px; color: #d4af37; margin-top: 8px; animation: blink 1.2s infinite; }
@@ -170,6 +172,7 @@
             pointer-events: auto;
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
             font-family: inherit;
+            z-index: 30;
         }
         #action-btn:active { background: #d4af37; color: #1a130e; transform: scale(0.95); }
 
@@ -179,6 +182,7 @@
 <body>
 
 <div id="game-container">
+    <!-- Menu di Creazione Personaggio -->
     <div id="menu-screen">
         <div class="menu-title">📜 Il Messaggero Medievale</div>
         <div class="form-group">
@@ -197,14 +201,17 @@
         <button id="start-btn">Inizia il Viaggio</button>
     </div>
 
+    <!-- Area di disegno principale -->
     <canvas id="game-canvas"></canvas>
 
+    <!-- UI Overlay e Controlli -->
     <div id="ui-overlay">
         <div class="hud-card" id="quest-status">Incarico: Esplora il villaggio e parla con la gente.</div>
         <div class="hud-card" id="gold-display">💰 0 Monete</div>
         <button id="action-btn">PARLA</button>
     </div>
 
+    <!-- Finestra di Dialogo -->
     <div id="dialogue-box">
         <p id="dialogue-text"></p>
         <div id="dialogue-prompt">Tocca lo schermo o premi [Spazio/E] per continuare</div>
@@ -239,9 +246,9 @@
 
     // Strutture e Case del panorama (Stile Abeto)
     const buildings = [
-        { name: "Tettoia del Sarto", x: 250, w: 110, h: 90, color: "#7a5c43", roof: "#9c7c5d", type: "Povero" },
-        { name: "La Locanda del Cinghiale", x: 1050, w: 240, h: 170, color: "#8b5a2b", roof: "#5c3a21", type: "Borghese" },
-        { name: "Maniero dei Medici", x: 1950, w: 280, h: 240, color: "#616f7d", roof: "#3a4454", type: "Nobile" }
+        { name: "Tettoia del Sarto", x: 250, w: 110, h: 90, color: "#7a5c43", roof: "#9c7c5d" },
+        { name: "La Locanda del Cinghiale", x: 1050, w: 240, h: 170, color: "#8b5a2b", roof: "#5c3a21" },
+        { name: "Maniero dei Medici", x: 1950, w: 280, h: 240, color: "#616f7d", roof: "#3a4454" }
     ];
 
     // Popolazione del regno (NPC)
@@ -267,14 +274,70 @@
     let currentNpcDialogue = null;
     const keys = {};
 
-    // Gestione Selezione Colore Mantello
-    document.querySelectorAll('.color-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
-            btn.classList.add('selected');
-            player.cloak = btn.dataset.color;
+    // Adattamento Finestra Responsiva immediato
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        groundY = canvas.height * 0.75; 
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas(); // Calcola le misure subito all'avvio della pagina
+
+    // Configurazione globale dei controlli (Sempre attivi in background)
+    function initInput() {
+        const handlePointer = (clientX) => {
+            if (!gameActive) return;
+            if (currentNpcDialogue) {
+                closeDialogue();
+                return;
+            }
+            player.targetX = clientX + camX;
+        };
+
+        // Click / Touch sullo schermo per muoversi
+        window.addEventListener('mousedown', (e) => {
+            if (!gameActive) return;
+            if (e.target.tagName !== 'BUTTON' && !document.getElementById('dialogue-box').contains(e.target)) {
+                handlePointer(e.clientX);
+            }
         });
-    });
+
+        window.addEventListener('touchstart', (e) => {
+            if (!gameActive) return;
+            if (e.target.tagName !== 'BUTTON' && !document.getElementById('dialogue-box').contains(e.target)) {
+                handlePointer(e.touches[0].clientX);
+            }
+        });
+
+        // Tastiera (PC)
+        window.addEventListener('keydown', (e) => { 
+            if (!gameActive) return;
+            keys[e.code] = true; 
+            if (e.code === 'Space' || e.code === 'KeyE') triggerInteraction();
+        });
+        window.addEventListener('keyup', (e) => { if (gameActive) keys[e.code] = false; });
+
+        // Pulsante virtuale PARLA (Mobile)
+        document.getElementById('action-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            triggerInteraction();
+        });
+        
+        // Cliccare sul box di dialogo lo chiude
+        document.getElementById('dialogue-box').addEventListener('click', () => {
+            closeDialogue();
+        });
+
+        // Selezione colore abito nel menu
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                player.cloak = btn.dataset.color;
+            });
+        });
+    }
+    initInput();
 
     // Avvio del gioco dal Menu
     document.getElementById('start-btn').addEventListener('click', () => {
@@ -285,7 +348,6 @@
         document.getElementById('ui-overlay').style.display = 'block';
         
         gameActive = true;
-        setupInput();
         resizeCanvas();
         player.x = 150;
         player.targetX = 150;
@@ -293,79 +355,22 @@
         requestAnimationFrame(gameLoop);
     });
 
-    // Adattamento Finestra Responsiva
-    function resizeCanvas() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        groundY = canvas.height * 0.75; // La linea di camminata è posizionata stabilmente in basso
-    }
-    window.addEventListener('resize', resizeCanvas);
-
-    // Integrazione Sistemi di Input (Mouse + Touch + Tastiera)
-    function setupInput() {
-        // Input Touch / Mouse per movimento preciso
-        const handlePointer = (clientX) => {
-            if (currentNpcDialogue) {
-                closeDialogue();
-                return;
-            }
-            // Calcola la coordinata del click allineandola allo scorrimento orizzontale
-            player.targetX = clientX + camX;
-            if (player.targetX < 40) player.targetX = 40;
-            if (player.targetX > worldWidth - 40) player.targetX = worldWidth - 40;
-        };
-
-        window.addEventListener('mousedown', (e) => {
-            if (e.target.tagName !== 'BUTTON' && !document.getElementById('dialogue-box').contains(e.target)) {
-                handlePointer(e.clientX);
-            }
-        });
-
-        window.addEventListener('touchstart', (e) => {
-            if (e.target.tagName !== 'BUTTON' && !document.getElementById('dialogue-box').contains(e.target)) {
-                handlePointer(e.touches[0].clientX);
-            }
-        });
-
-        // Input Tastiera (Compatibile PC)
-        window.addEventListener('keydown', (e) => { keys[e.code] = true; handleKeyboardActions(e.code); });
-        window.addEventListener('keyup', (e) => keys[e.code] = false);
-
-        // Pulsante virtuale d'azione per Mobile
-        const actBtn = document.getElementById('action-btn');
-        actBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            triggerInteraction();
-        });
-        
-        document.getElementById('dialogue-box').addEventListener('click', () => {
-            closeDialogue();
-        });
-    }
-
-    function handleKeyboardActions(code) {
-        if (code === 'Space' || code === 'KeyE') {
-            triggerInteraction();
-        }
-    }
-
-    // Logica di Interazione ed Evoluzione Quest
+    // Logica di Interazione NPC / Quest
     function triggerInteraction() {
         if (currentNpcDialogue) {
             closeDialogue();
             return;
         }
 
-        // Cerca se c'è un NPC sufficientemente vicino
         const nearNpc = npcs.find(npc => Math.abs(player.x - npc.x) < 55);
         if (nearNpc) {
             currentNpcDialogue = nearNpc;
             let msg = nearNpc.dialogue;
 
             if (activeQuest && activeQuest.target === nearNpc.id) {
-                msg = nearNpc.completeDialogue || "Perfetto, ti ringrazio immensamente per l'aiuto!";
+                msg = nearNpc.completeDialogue || "Perfetto, ti ringrazio immensamente!";
             } else if (activeQuest && activeQuest.target !== nearNpc.id) {
-                msg = `Benvenuto ${player.name}, vedo che hai già del lavoro da sbrigare per il regno. Torna più tardi!`;
+                msg = `Benvenuto ${player.name}, vedo che hai già un'altra consegna da sbrigare.`;
             }
 
             document.getElementById('dialogue-text').innerHTML = `<strong>${nearNpc.name}</strong> <small>(${nearNpc.ceto})</small><br>"${msg}"`;
@@ -380,7 +385,6 @@
         document.getElementById('dialogue-box').style.display = 'none';
         currentNpcDialogue = null;
 
-        // Gestione ricompensa o sblocco quest al termine del dialogo
         if (activeQuest && activeQuest.target === npc.id) {
             gold += npc.questReward || 15;
             document.getElementById('gold-display').innerText = `💰 ${gold} Monete`;
@@ -392,29 +396,23 @@
         }
     }
 
-    // Aggiornamento della fisica e delle posizioni
+    // Aggiornamento posizioni e fisica
     function update() {
-        // Se c'è un dialogo aperto, il personaggio si arresta subito
         if (currentNpcDialogue) {
             player.isMoving = false;
             return;
         }
 
-        // Aggiornamento tramite tastiera (sposta la destinazione fluidamente in tempo reale)
-        if (keys['ArrowRight'] || keys['KeyD']) {
-            player.targetX += player.speed;
-        } else if (keys['ArrowLeft'] || keys['KeyA']) {
-            player.targetX -= player.speed;
-        }
+        if (keys['ArrowRight'] || keys['KeyD']) player.targetX += player.speed;
+        if (keys['ArrowLeft'] || keys['KeyA']) player.targetX -= player.speed;
 
-        // Limitazione dei confini del mondo
         if (player.targetX < 40) player.targetX = 40;
         if (player.targetX > worldWidth - 40) player.targetX = worldWidth - 40;
 
-        // Movimento ad interpolazione (Inerzia stile Abeto)
+        // Movimento ad interpolazione (Inerzia fluida stile Abeto)
         let dx = player.targetX - player.x;
         if (Math.abs(dx) > 0.5) {
-            player.x += dx * 0.12; // Modifica questo valore per variare la morbidezza del movimento
+            player.x += dx * 0.12; 
             player.isMoving = true;
             player.walkTimer += 0.15;
         } else {
@@ -422,22 +420,22 @@
             player.isMoving = false;
         }
 
-        // Aggiornamento telecamera d'inseguimento morbido
+        // Telecamera d'inseguimento morbida
         let targetCamX = player.x - canvas.width / 2;
         camX += (targetCamX - camX) * 0.1;
         if (camX < 0) camX = 0;
         if (camX > worldWidth - canvas.width) camX = worldWidth - canvas.width;
 
-        // Gestione visibilità del pulsante d'azione virtuale
+        // Mostra pulsante "PARLA" solo se vicino a NPC
         const nearAnyNpc = npcs.some(npc => Math.abs(player.x - npc.x) < 55);
         document.getElementById('action-btn').style.display = nearAnyNpc ? 'flex' : 'none';
     }
 
-    // Motore Grafico 2D su Canvas
+    // Rendering su Canvas
     function render() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // --- LIVELLO 1: Cielo e Atmosfera ---
+        // Cielo Gradiente
         let skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
         skyGrad.addColorStop(0, '#ebd9c8');
         skyGrad.addColorStop(0.6, '#dfc5b0');
@@ -445,38 +443,35 @@
         ctx.fillStyle = skyGrad;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // --- LIVELLO 2: Sfondo Parallasse (Montagne/Colline Lontane) ---
+        // Sfondo Parallasse (Montagne)
         ctx.save();
-        ctx.translate(-camX * 0.25, 0); // Si muove a un quarto della velocità della telecamera
+        ctx.translate(-camX * 0.25, 0);
         ctx.fillStyle = '#bfa593';
         ctx.beginPath();
+        ctx.moveTo(0, groundY);
         for (let i = 0; i <= worldWidth + 400; i += 300) {
             ctx.lineTo(i, groundY - 140 - (Math.sin(i * 0.01) * 30));
             ctx.lineTo(i + 150, groundY - 180 - (Math.cos(i * 0.005) * 40));
         }
         ctx.lineTo(worldWidth + 600, groundY);
-        ctx.lineTo(0, groundY);
         ctx.closePath();
         ctx.fill();
         ctx.restore();
 
-        // --- LIVELLO 3: Primo Piano e Mondo di Gioco ---
+        // Elementi di Gioco (Mappa reale)
         ctx.save();
         ctx.translate(-camX, 0);
 
-        // Disegno pavimentazione/terreno
-        ctx.fillStyle = '#8fa874'; // Prato soft medievale
+        // Terreno
+        ctx.fillStyle = '#8fa874'; 
         ctx.fillRect(0, groundY, worldWidth, canvas.height - groundY);
         ctx.fillStyle = '#738a59'; 
-        ctx.fillRect(0, groundY, worldWidth, 8); // Linea superiore del terreno
+        ctx.fillRect(0, groundY, worldWidth, 8);
 
-        // Disegno Edifici storici
+        // Edifici
         buildings.forEach(b => {
-            // Struttura
             ctx.fillStyle = b.color;
             ctx.fillRect(b.x, groundY - b.h, b.w, b.h);
-            
-            // Tetto a spiovente
             ctx.fillStyle = b.roof;
             ctx.beginPath();
             ctx.moveTo(b.x - 15, groundY - b.h);
@@ -484,62 +479,89 @@
             ctx.lineTo(b.x + b.w + 15, groundY - b.h);
             ctx.closePath();
             ctx.fill();
-
-            // Dettagli porte e finestre geometriche
             ctx.fillStyle = '#423225';
-            ctx.fillRect(b.x + b.w / 2 - 15, groundY - 50, 30, 50); // Porta
-            
-            // Insegna testuale
+            ctx.fillRect(b.x + b.w / 2 - 15, groundY - 50, 30, 50);
             ctx.fillStyle = '#241a12';
             ctx.font = 'italic bold 13px Georgia';
             ctx.textAlign = 'center';
             ctx.fillText(b.name, b.x + b.w / 2, groundY - b.h + 25);
         });
 
-        // Disegno Popolazione (NPC)
+        // Popolazione NPC
         npcs.forEach(npc => {
-            let baseNpcY = groundY;
-            
-            // Tunica
             ctx.fillStyle = npc.color;
             ctx.beginPath();
-            ctx.moveTo(npc.x, baseNpcY);
-            ctx.lineTo(npc.x - 14, baseNpcY);
-            ctx.lineTo(npc.x, baseNpcY - 45);
-            ctx.lineTo(npc.x + 14, baseNpcY);
+            ctx.moveTo(npc.x, groundY);
+            ctx.lineTo(npc.x - 14, groundY);
+            ctx.lineTo(npc.x, groundY - 45);
+            ctx.lineTo(npc.x + 14, groundY);
             ctx.closePath();
             ctx.fill();
 
-            // Elementi distintivi del vestiario (Grembiuli, Sciarpe, Mantelle Nobili)
             ctx.fillStyle = npc.detail;
-            ctx.fillRect(npc.x - 4, baseNpcY - 25, 8, 25);
+            ctx.fillRect(npc.x - 4, groundY - 25, 8, 25);
 
-            // Volto
             ctx.fillStyle = '#fce3cd';
             ctx.beginPath();
-            ctx.arc(npc.x, baseNpcY - 50, 8, 0, Math.PI * 2);
+            ctx.arc(npc.x, groundY - 50, 8, 0, Math.PI * 2);
             ctx.fill();
 
-            // Etichetta informativa dell'NPC
             ctx.fillStyle = '#241a12';
             ctx.font = '11px Georgia';
             ctx.textAlign = 'center';
-            ctx.fillText(npc.name, npc.x, baseNpcY - 70);
+            ctx.fillText(npc.name, npc.x, groundY - 70);
 
-            // Icona di Quest fluttuante sopra la testa
-            let distToPlayer = Math.abs(player.x - npc.x);
+            // Icona Quest Fluttuante
             if (activeQuest && activeQuest.target === npc.id) {
                 ctx.fillStyle = '#cc3333';
                 ctx.font = 'bold 20px Georgia';
-                ctx.fillText("?", npc.x, baseNpcY - 85 + Math.sin(Date.now() * 0.005) * 3);
+                ctx.fillText("?", npc.x, groundY - 85 + Math.sin(Date.now() * 0.005) * 3);
             } else if (!activeQuest && npc.quest) {
                 ctx.fillStyle = '#d4af37';
                 ctx.font = 'bold 20px Georgia';
-                ctx.fillText("!", npc.x, baseNpcY - 85 + Math.sin(Date.now() * 0.005) * 3);
+                ctx.fillText("!", npc.x, groundY - 85 + Math.sin(Date.now() * 0.005) * 3);
             }
         });
 
-        // Disegno del Giocatore (Il Messaggero)
-        let bobbingY = 0;
-        if (player.isMoving) {
-       
+        // Giocatore (Il Messaggero)
+        let bobbingY = player.isMoving ? Math.sin(player.walkTimer) * 3 : 0;
+        let pCurY = groundY + bobbingY;
+
+        ctx.fillStyle = '#222';
+        ctx.fillRect(player.x - 7, pCurY - 15, 14, 15);
+
+        ctx.fillStyle = player.cloak;
+        ctx.beginPath();
+        ctx.moveTo(player.x, pCurY - player.height + 12);
+        ctx.lineTo(player.x - 14, pCurY - 4);
+        ctx.lineTo(player.x + 14, pCurY - 4);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#fce3cd';
+        ctx.beginPath();
+        ctx.arc(player.x, pCurY - player.height + 10, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = player.cloak;
+        ctx.beginPath();
+        ctx.arc(player.x, pCurY - player.height + 8, 9, Math.PI, 0);
+        ctx.fill();
+
+        if (activeQuest) {
+            ctx.fillStyle = '#5c3a21';
+            ctx.fillRect(player.x - 12, pCurY - 24, 8, 9);
+        }
+
+        ctx.fillStyle = '#241a12';
+        ctx.font = 'bold 12px Georgia';
+        ctx.textAlign = 'center';
+        ctx.fillText(player.name, player.x, pCurY - player.height - 10);
+
+        ctx.restore();
+    }
+
+    // Ciclo di gioco principale
+    function gameLoop() {
+        if (!gameActive) return;
+      
