@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Il Messaggero del Regno - 2.5D</title>
+    <title>Il Messaggero del Regno - 2.5D Safe</title>
     <style>
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
         body {
@@ -22,6 +22,15 @@
         }
         canvas { display: block; width: 100%; height: 100%; }
         
+        /* Debug Box per intercettare errori su schermo */
+        #debug-box {
+            position: absolute; top: 5px; left: 5px; right: 5px;
+            background: rgba(255, 0, 0, 0.9); color: white;
+            padding: 8px; font-family: monospace; font-size: 12px;
+            z-index: 1000; display: none; border-radius: 4px;
+            pointer-events: auto; max-height: 80px; overflow-y: auto;
+        }
+
         /* Menu di Creazione Personaggio */
         #menu-screen {
             position: absolute;
@@ -110,6 +119,8 @@
 <body>
 
 <div id="game-container">
+    <div id="debug-box"></div>
+
     <div id="menu-screen">
         <div class="menu-title">📜 Il Messaggero del Regno</div>
         <div class="form-group">
@@ -145,7 +156,13 @@
 </div>
 
 <script>
-    // Esecuzione immediata dei puntatori DOM esterni
+    // SISTEMA DI LOG DELLE ECCEZIONI LIVE
+    const debugBox = document.getElementById('debug-box');
+    window.addEventListener('error', function(e) {
+        debugBox.style.display = 'block';
+        debugBox.innerText = "CRASH: " + e.message + " -> Riga: " + e.lineno;
+    });
+
     const canvas = document.getElementById('game-canvas');
     const ctx = canvas.getContext('2d');
 
@@ -209,14 +226,8 @@
     let currentNpcDialogue = null;
     const keys = {};
 
-    // --- CONFIGURAZIONE INTERFACCIA JOYSTICK ---
-    const joystick = {
-        active: false,
-        startX: 0, startY: 0,
-        vx: 0, vy: 0,
-        maxRadius: 40
-    };
-
+    // --- JOYSTICK INTERFACE ---
+    const joystick = { active: false, startX: 0, startY: 0, vx: 0, vy: 0, maxRadius: 40 };
     const joyContainer = document.getElementById('joystick-container');
     const joyKnob = document.getElementById('joystick-knob');
 
@@ -249,13 +260,12 @@
             joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
             joystick.vx = dx / joystick.maxRadius;
             joystick.vy = dy / joystick.maxRadius;
-        }, { passive: true });
+        });
 
         window.addEventListener('touchend', () => {
             if (!joystick.active) return;
             joystick.active = false;
-            joystick.vx = 0;
-            joystick.vy = 0;
+            joystick.vx = 0; joystick.vy = 0;
             joyKnob.style.transform = 'translate(0px, 0px)';
         });
     }
@@ -305,16 +315,21 @@
     initInput();
 
     document.getElementById('start-btn').addEventListener('click', (e) => {
-        e.preventDefault();
-        const nameVal = document.getElementById('player-name').value.trim();
-        if (nameVal) player.name = nameVal;
+        try {
+            e.preventDefault();
+            const nameVal = document.getElementById('player-name').value.trim();
+            if (nameVal) player.name = nameVal;
 
-        document.getElementById('menu-screen').style.display = 'none';
-        document.getElementById('ui-overlay').style.display = 'block';
-        
-        gameActive = true;
-        resizeCanvas();
-        requestAnimationFrame(gameLoop);
+            document.getElementById('menu-screen').style.display = 'none';
+            document.getElementById('ui-overlay').style.display = 'block';
+            
+            gameActive = true;
+            resizeCanvas();
+            requestAnimationFrame(gameLoop);
+        } catch(err) {
+            debugBox.style.display = 'block';
+            debugBox.innerText = "Errore Click Inizio: " + err.message;
+        }
     });
 
     function triggerInteraction() {
@@ -367,8 +382,7 @@
             return;
         }
 
-        player.vx = 0;
-        player.vy = 0;
+        player.vx = 0; player.vy = 0;
 
         if (keys['ArrowRight'] || keys['KeyD']) player.vx = player.speed;
         if (keys['ArrowLeft'] || keys['KeyA']) player.vx = -player.speed;
@@ -398,10 +412,16 @@
         camera.x += ((player.x - canvas.width / 2) - camera.x) * 0.08;
         camera.y += ((player.y - canvas.height / 2) - camera.y) * 0.08;
 
+        let maxCamX = worldSize.width - canvas.width;
+        let maxCamY = worldSize.height - canvas.height;
+
         if (camera.x < 0) camera.x = 0;
-        if (camera.x > worldSize.width - canvas.width) camera.x = Math.max(0, worldSize.width - canvas.width);
+        if (maxCamX > 0 && camera.x > maxCamX) camera.x = maxCamX;
+        if (maxCamX <= 0) camera.x = 0;
+
         if (camera.y < 0) camera.y = 0;
-        if (camera.y > worldSize.height - canvas.height) camera.y = Math.max(0, worldSize.height - canvas.height);
+        if (maxCamY > 0 && camera.y > maxCamY) camera.y = maxCamY;
+        if (maxCamY <= 0) camera.y = 0;
 
         const nearAnyNpc = npcs.some(npc => {
             let dx = player.x - npc.x;
@@ -419,26 +439,18 @@
         ctx.translate(-camera.x, -camera.y);
 
         ctx.fillStyle = '#6b655b';
-        ctx.beginPath();
-        ctx.arc(1200, 1200, 220, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(1200, 1200, 220, 0, Math.PI * 2); ctx.fill();
 
         ctx.strokeStyle = '#8c765c';
-        ctx.lineWidth = 45;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
+        ctx.lineWidth = 45; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.moveTo(670, 760);  
-        ctx.lineTo(1200, 1200); 
-        ctx.lineTo(1750, 720);  
+        ctx.moveTo(670, 760); ctx.lineTo(1200, 1200); ctx.lineTo(1750, 720);  
         ctx.stroke();
 
         decorativeElements.forEach(el => {
             if (el.type === 'flower') {
                 ctx.fillStyle = el.color;
-                ctx.beginPath();
-                ctx.arc(el.x, el.y, 3, 0, Math.PI*2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(el.x, el.y, 3, 0, Math.PI*2); ctx.fill();
             }
         });
 
@@ -454,8 +466,7 @@
                     ctx.fillStyle = b.color;
                     ctx.fillRect(b.x - b.w/2, b.y - b.h, b.w, b.h);
 
-                    ctx.strokeStyle = '#3e2a14';
-                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = '#3e2a14'; ctx.lineWidth = 4;
                     ctx.strokeRect(b.x - b.w/2, b.y - b.h, b.w, b.h);
                     ctx.beginPath();
                     ctx.moveTo(b.x - b.w/2, b.y - b.h); ctx.lineTo(b.x + b.w/2, b.y);
@@ -467,30 +478,8 @@
                     ctx.moveTo(b.x - b.w/2 - 15, b.y - b.h);
                     ctx.lineTo(b.x, b.y - b.h - 50);
                     ctx.lineTo(b.x + b.w/2 + 15, b.y - b.h);
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.stroke();
+                    ctx.closePath(); ctx.fill(); ctx.stroke();
 
-                    ctx.fillStyle = '#26190a';
-                    ctx.fillRect(b.x - 18, b.y - 45, 36, 45);
-
+                    ctx.fillStyle = '#26190a'; ctx.fillRect(b.x - 18, b.y - 45, 36, 45);
                     ctx.fillStyle = '#ffd000';
-                    ctx.fillRect(b.x - b.w/4 - 10, b.y - b.h + 30, 20, 25);
-                    ctx.fillRect(b.x + b.w/4 - 10, b.y - b.h + 30, 20, 25);
-                    
-                    ctx.fillStyle = '#f4edd2';
-                    ctx.font = 'italic bold 13px Georgia';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(b.name, b.x, b.y - b.h - 10);
-                }
-            });
-        });
-
-        decorativeElements.forEach(el => {
-            if (el.type === 'tree') {
-                entities.push({
-                    y: el.y,
-                    render: () => {
-                        ctx.fillStyle = 'rgba(0,0,0,0.25)';
-                        ctx.beginPath();
-                        ctx.ellip
+                    ctx
