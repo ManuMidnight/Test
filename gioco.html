@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medieval Messenger Prototipo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1e1e24;
+            font-family: 'Georgia', serif;
+            color: #f4edd2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 450px;
+            background: #2c251e;
+            border: 6px double #8b5a2b;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+        }
+        /* Schermata Customizzazione */
+        #menu-screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, #3e3126 0%, #1a130e 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        .menu-title {
+            font-size: 32px;
+            color: #d4af37;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px black;
+        }
+        .form-group {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        input[type="text"] {
+            padding: 8px;
+            font-size: 16px;
+            border: 2px solid #8b5a2b;
+            background: #f4edd2;
+            color: #1a130e;
+            border-radius: 4px;
+        }
+        .color-picker {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .color-btn {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        .color-btn.selected {
+            border: 3px solid #d4af37;
+            transform: scale(1.1);
+        }
+        #start-btn {
+            margin-top: 25px;
+            padding: 10px 25px;
+            font-size: 18px;
+            background: #8b5a2b;
+            color: #f4edd2;
+            border: 2px solid #d4af37;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        #start-btn:hover {
+            background: #d4af37;
+            color: #1a130e;
+        }
+        /* UI Gioco */
+        #game-canvas {
+            display: none;
+            background: #708238;
+        }
+        #ui-overlay {
+            display: none;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            pointer-events: none;
+        }
+        .badge {
+            background: rgba(44, 37, 30, 0.85);
+            padding: 8px 15px;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            display: inline-block;
+            font-size: 14px;
+        }
+        #dialogue-box {
+            display: none;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            background: rgba(26, 19, 14, 0.95);
+            border: 3px double #d4af37;
+            padding: 15px;
+            box-sizing: border-box;
+            border-radius: 4px;
+        }
+        #dialogue-text {
+            margin: 0;
+            font-size: 16px;
+            line-height: 1.4;
+        }
+        #dialogue-prompt {
+            text-align: right;
+            font-size: 12px;
+            color: #d4af37;
+            margin-top: 5px;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="menu-screen">
+        <div class="menu-title">📜 Il Messaggero del Regno</div>
+        <div class="form-group">
+            <label style="display:block; margin-bottom: 5px;">Nome del Messaggero:</label>
+            <input type="text" id="player-name" value="Serafino" maxlength="12">
+        </div>
+        <div class="form-group">
+            <label>Colore del Mantello Reale:</label>
+            <div class="color-picker">
+                <div class="color-btn selected" style="background: #a22c2c;" data-color="#a22c2c"></div>
+                <div class="color-btn" style="background: #2c6ca2;" data-color="#2c6ca2"></div>
+                <div class="color-btn" style="background: #2ca26c;" data-color="#2ca26c"></div>
+                <div class="color-btn" style="background: #cca42c;" data-color="#cca42c"></div>
+            </div>
+        </div>
+        <button id="start-btn">Inizia il Viaggio</button>
+    </div>
+
+    <canvas id="game-canvas" width="800" height="450"></canvas>
+
+    <div id="ui-overlay">
+        <div class="badge" id="quest-status">Compito attuale: Parla con gli abitanti del villaggio.</div>
+        <div class="badge" id="gold-display" style="float: right;">💰 Oro: 0</div>
+    </div>
+
+    <div id="dialogue-box">
+        <p id="dialogue-text">Benvenuto nel regno...</p>
+        <div id="dialogue-prompt">Premi [E] o [Spazio] per continuare</div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Stato di gioco
+    let gameActive = false;
+    let worldWidth = 1800; // Mappa estesa orizzontalmente
+    let gold = 0;
+    let activeQuest = null;
+
+    // Configurazione Giocatore
+    const player = {
+        name: "Serafino",
+        cloak: "#a22c2c",
+        x: 100,
+        y: 350,
+        speed: 5,
+        width: 24,
+        height: 38,
+        vx: 0
+    };
+
+    // Tasti premuti
+    const keys = {};
+
+    // Elementi del Mondo (Case, Taverne, ecc.)
+    const buildings = [
+        { name: "Capanna di Paglia", x: 150, width: 120, height: 100, color: "#8b7355", roof: "#cd853f", type: "Povero" },
+        { name: "Locanda del Drago", x: 750, width: 220, height: 160, color: "#a0522d", roof: "#8b4513", type: "Medio" },
+        { name: "Maniero del Conte", x: 1450, width: 260, height: 220, color: "#708090", roof: "#4682b4", type: "Nobile" }
+    ];
+
+    // NPC (Abito basato sul ceto sociale)
+    const npcs = [
+        { 
+            id: "contadino", name: "Alfonso il Contadino", x: 280, y: 350, 
+            color: "#6e473b", detailColor: "#cd853f", ceto: "Povero",
+            dialogue: "Ah, messaggero! La mia schiena si spezza... Potresti portare questi 'Attrezzi Riparati' a Mastro Giovanni alla Locanda?",
+            quest: { item: "Attrezzi Riparati", target: "fabbro", text: "Porta gli attrezzi alla Locanda centrale." }
+        },
+        { 
+            id: "fabbro", name: "Mastro Giovanni", x: 850, y: 350, 
+            color: "#4a4a4a", detailColor: "#d2691e", ceto: "Medio",
+            dialogue: "Benvenuto alla Locanda! Se hai consegne per me, accetto volentieri.",
+            completeDialogue: "Grazie ragazzo! Alfonso ne ha sempre una. Ecco una moneta per il disturbo.",
+            questReward: 15
+        },
+        { 
+            id: "nobile", name: "Contessa Beatrice", x: 1550, y: 350, 
+            color: "#5c2c77", detailColor: "#d4af37", ceto: "Nobile",
+            dialogue: "Oh, finalmente un corriere. Prendi questa 'Lettera Sigillata' e consegnala ad Alfonso alla capanna. È... una faccenda privata.",
+            quest: { item: "Lettera Sigillata", target: "contadino", text: "Consegna la lettera segreta ad Alfonso alla capanna." }
+        }
+    ];
+
+    // Dialoghi attivi
+    let currentDialogueNpc = null;
+
+    // Gestione colori customizzazione
+    document.querySelectorAll('.color-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            player.cloak = btn.dataset.color;
+        });
+    });
+
+    // Avvio Gioco
+    document.getElementById('start-btn').addEventListener('click', () => {
+        const nameInput = document.getElementById('player-name').value.trim();
+        if(nameInput) player.name = nameInput;
+        
+        document.getElementById('menu-screen').style.display = 'none';
+        canvas.style.display = 'block';
+        document.getElementById('ui-overlay').style.display = 'block';
+        
+        gameActive = true;
+        initGame();
+    });
+
+    function initGame() {
+        window.addEventListener('keydown', e => { keys[e.code] = true; handleInteraction(e.code); });
+        window.addEventListener('keyup', e => keys[e.code] = false);
+        gameLoop();
+    }
+
+    // Interazione con NPC
+    function handleInteraction(code) {
+        if (code === 'KeyE' || code === 'Space') {
+            if (currentDialogueNpc) {
+                // Chiude dialogo
+                document.getElementById('dialogue-box').style.display = 'none';
+                
+                // Gestione logica della Quest
+                if (activeQuest && activeQuest.target === currentDialogueNpc.id) {
+                    // Completa Quest
+                    gold += currentDialogueNpc.questReward || 10;
+                    document.getElementById('gold-display').innerText = `💰 Oro: ${gold}`;
+                    activeQuest = null;
+                    document.getElementById('quest-status').innerText = "Compito attuale: Parla con gli abitanti del villaggio.";
+                } else if (!activeQuest && currentDialogueNpc.quest) {
+                    // Attiva Nuova Quest
+                    activeQuest = currentDialogueNpc.quest;
+                    document.getElementById('quest-status').innerText = `Compito attuale: ${activeQuest.text} [${activeQuest.item}]`;
+                }
+                
+                currentDialogueNpc = null;
+            } else {
+                // Cerca NPC vicino
+                npcs.forEach(npc => {
+                    let dist = Math.abs(player.x - npc.x);
+                    if (dist < 40) {
+                        currentDialogueNpc = npc;
+                        let text = npc.dialogue;
+                        
+                        // Cambia testo se si sta consegnando qui
+                        if (activeQuest && activeQuest.target === npc.id) {
+                            text = npc.completeDialogue || "Grazie per avermi portato l'oggetto!";
+                        } else if (activeQuest && activeQuest.target !== npc.id) {
+                            text = `Salute ${player.name}, vedo che sei impegnato con un'altra consegna.`;
+                        }
+                        
+                        document.getElementById('dialogue-text').innerHTML = `<strong>${npc.name} (${npc.ceto}):</strong><br>"${text}"`;
+                        document.getElementById('dialogue-box').style.display = 'block';
+                    }
+                });
+            }
+        }
+    }
+
+    // Loop Principale
+    function gameLoop() {
+        if (!gameActive) return;
+        update();
+        render();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // Aggiornamento Logica
+    function update() {
+        // Se c'è un dialogo aperto, il giocatore si ferma
+        if (currentDialogueNpc) {
+            player.vx = 0;
+            return;
+        }
+
+        if (keys['KeyA'] || keys['ArrowLeft']) {
+            player.vx = -player.speed;
+        } else if (keys['KeyD'] || keys['ArrowRight']) {
+            player.vx = player.speed;
+        } else {
+            player.vx = 0;
+        }
+
+        player.x += player.vx;
+
+        // Limiti del mondo
+        if (player.x < 20) player.x = 20;
+        if (player.x > worldWidth - 20) player.x = worldWidth - 20;
+    }
+
+    // Rendering Grafico
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Calcolo della Camera (Inseguimento orizzontale come abeto.co)
+        let camX = player.x - canvas.width / 2;
+        if (camX < 0) camX = 0;
+        if (camX > worldWidth - canvas.width) camX = worldWidth - canvas.width;
+
+        ctx.save();
+        ctx.translate(-camX, 0);
+
+        // Disegno Cielo / Sfondo soft medievale
+        let skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        skyGradient.addColorStop(0, '#e3d5ca');
+        skyGradient.addColorStop(1, '#d5bdaf');
+        ctx.fillStyle = skyGradient;
+        ctx.fillRect(camX, 0, canvas.width, canvas.height);
+
+        // Terreno / Erba
+        ctx.fillStyle = '#a3b18a';
+        ctx.fillRect(0, 350, worldWidth, 100);
+        ctx.fillStyle = '#588157';
+        ctx.fillRect(0, 350, worldWidth, 8); // Linea di terra
+
+        // Disegno Edifici
+        buildings.forEach(b => {
+            // Corpo edificio
+            ctx.fillStyle = b.color;
+            ctx.fillRect(b.x, 350 - b.height, b.width, b.height);
+            // Tetto triangolare
+            ctx.fillStyle = b.roof;
+            ctx.beginPath();
+            ctx.moveTo(b.x - 10, 350 - b.height);
+            ctx.lineTo(b.x + b.width / 2, 350 - b.height - 40);
+            ctx.lineTo(b.x + b.width + 10, 350 - b.height);
+            ctx.closePath();
+            ctx.fill();
+            // Insegna o Scritta dell'edificio
+            ctx.fillStyle = '#1a130e';
+            ctx.font = 'bold 12px Georgia';
+            ctx.fillText(b.name, b.x + 10, 350 - b.height + 25);
+        });
+
+        // Disegno NPC
+        npcs.forEach(npc => {
+            // Corpo/Abito (Triangolo/Tunica)
+            ctx.fillStyle = npc.color;
+            ctx.beginPath();
+            ctx.moveTo(npc.x, 350);
+            ctx.lineTo(npc.x - 12, 350);
+            ctx.lineTo(npc.x, 315);
+            ctx.lineTo(npc.x + 12, 350);
+            ctx.closePath();
+            ctx.fill();
+
+            // Dettaglio abito (es. bordi dorati o grembiule)
+            ctx.fillStyle = npc.detailColor;
+            ctx.fillRect(npc.x - 4, 330, 8, 20);
+
+            // Testa
+            ctx.fillStyle = '#ffdbac';
+            ctx.beginPath();
+            ctx.arc(npc.x, 310, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Nome e Indicatore Interazione
+            ctx.fillStyle = '#1a130e';
+            ctx.font = '11px Georgia';
+            ctx.textAlign = 'center';
+            ctx.fillText(npc.name, npc.x, 295);
+
+            // Indicatore di Quest (Punto esclamativo o di domanda)
+            let dist = Math.abs(player.x - npc.x);
+            if (dist < 40) {
+                ctx.fillStyle = '#d4af37';
+                ctx.font = 'bold 14px sans-serif';
+                ctx.fillText("[E]", npc.x, 275);
+            } else if (activeQuest && activeQuest.target === npc.id) {
+                ctx.fillStyle = '#a22c2c';
+                ctx.font = 'bold 18px sans-serif';
+                ctx.fillText("?", npc.x, 275);
+            } else if (!activeQuest && npc.quest) {
+                ctx.fillStyle = '#2c6ca2';
+                ctx.font = 'bold 18px sans-serif';
+                ctx.fillText("!", npc.x, 275);
+            }
+        });
+
+        // Disegno Giocatore (Il Messaggero)
+        // Corpo/Tunica
+        ctx.fillStyle = '#333';
+        ctx.fillRect(player.x - 8, player.y - 25, 16, 25);
+        
+        // Mantello Customizzato
+        ctx.fillStyle = player.cloak;
+        ctx.beginPath();
+        ctx.moveTo(player.x, player.y - 25);
+        ctx.lineTo(player.x - 11, player.y);
+        ctx.lineTo(player.x + 11, player.y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Testa
+        ctx.fillStyle = '#ffdbac';
+        ctx.beginPath();
+        ctx.arc(player.x, player.y - 28, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Cappuccio del mantello sulla testa
+        ctx.fillStyle = player.cloak;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y - 30, 8, Math.PI, 0);
+        ctx.fill();
+
+        // Nome Giocatore
+        ctx.fillStyle = '#1a130e';
+        ctx.font = 'bold 12px Georgia';
+        ctx.textAlign = 'center';
+        ctx.fillText(player.name, player.x, player.y - 42);
+
+        // Borsa delle consegne (se ha una quest attiva)
+        if (activeQuest) {
+            ctx.fillStyle = '#8b5a2b';
+            ctx.fillRect(player.x + (player.vx >= 0 ? 4 : -12), player.y - 15, 8, 8);
+        }
+
+        ctx.restore();
+    }
+</script>
+
+</body>
+</html>
